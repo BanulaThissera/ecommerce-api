@@ -25,6 +25,10 @@ app.use("/api/users", userRoutes);
 const cartRoutes = require("./routes/cart");
 app.use("/api/cart", cartRoutes);
 
+//order routes
+// Order routes
+const orderRoutes = require("./routes/orders");
+app.use("/api/orders", orderRoutes);
 
 // Home route
 app.get("/", (req, res) => {
