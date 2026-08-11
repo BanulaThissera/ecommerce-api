@@ -1,7 +1,10 @@
 const express = require("express");
+
 const router = express.Router();
 
 const db = require("../config/db");
+const authMiddleware = require("../middleware/authMiddleware");
+const adminMiddleware = require("../middleware/adminMiddleware");
 
 // GET all products
 router.get("/", (req, res) => {
@@ -42,28 +45,37 @@ router.get("/:id", (req, res) => {
 });
 
 // CREATE product
-router.post("/", (req, res) => {
-    const { name, price, category } = req.body;
+router.post(
+    "/",
+    authMiddleware,
+    adminMiddleware,
+    (req, res) => {
+        const { name, price, category } = req.body;
 
-    const sql = `
-        INSERT INTO products (name, price, category)
-        VALUES (?, ?, ?)
-    `;
+        const sql = `
+            INSERT INTO products (name, price, category)
+            VALUES (?, ?, ?)
+        `;
 
-    db.query(sql, [name, price, category], (err, result) => {
-        if (err) {
-            return res.status(500).json({
-                message: "Database error",
-                error: err.message
-            });
-        }
+        db.query(
+            sql,
+            [name, price|| null, category || null],
+            (err, result) => {
+                if (err) {
+                    return res.status(500).json({
+                        message: "Database error",
+                        error: err.message
+                    });
+                }
 
-        res.status(201).json({
-            message: "Product created successfully",
-            productId: result.insertId
-        });
-    });
-});
+                res.status(201).json({
+                    message: "Product created successfully",
+                    productId: result.insertId
+                });
+            }
+        );
+    }
+);
 
 // UPDATE product
 router.put("/:id", (req, res) => {
