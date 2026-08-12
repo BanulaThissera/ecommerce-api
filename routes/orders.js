@@ -4,6 +4,7 @@ const router = express.Router();
 
 const db = require("../config/db");
 const authMiddleware = require("../middleware/authMiddleware");
+const adminMiddleware = require("../middleware/adminMiddleware");
 
 
 // =====================================================
@@ -171,5 +172,196 @@ router.get("/", authMiddleware, (req, res) => {
     });
 
 });
+// =====================================================
+// GET SINGLE ORDER
+// GET /api/orders/:id
+// =====================================================
 
+router.get("/:id", authMiddleware, (req, res) => {
+
+    const orderId = req.params.id;
+    const userId = req.user.id;
+
+    // Get order
+    const orderSql = `
+        SELECT
+            id,
+            total_amount,
+            status,
+            created_at
+        FROM orders
+        WHERE id = ? AND user_id = ?
+    `;
+
+    db.query(
+        orderSql,
+        [orderId, userId],
+        (err, orderResults) => {
+
+            if (err) {
+                return res.status(500).json({
+                    message: "Database error",
+                    error: err.message
+                });
+            }
+
+            // Order not found
+            if (orderResults.length === 0) {
+                return res.status(404).json({
+                    message: "Order not found"
+                });
+            }
+
+            const order = orderResults[0];
+
+            // Get order items
+            const itemsSql = `
+                SELECT
+                    order_items.product_id,
+                    products.name,
+                    order_items.quantity,
+                    order_items.price,
+                    (order_items.quantity * order_items.price) AS total
+                FROM order_items
+                JOIN products
+                ON order_items.product_id = products.id
+                WHERE order_items.order_id = ?
+            `;
+
+            db.query(
+                itemsSql,
+                [orderId],
+                (err, itemResults) => {
+
+                    if (err) {
+                        return res.status(500).json({
+                            message: "Database error",
+                            error: err.message
+                        });
+                    }
+
+                    res.json({
+                        message: "Order details retrieved successfully",
+                        order: {
+                            id: order.id,
+                            total_amount: order.total_amount,
+                            status: order.status,
+                            created_at: order.created_at,
+                            items: itemResults
+                        }
+                    });
+
+                }
+            );
+
+        }
+    );
+
+});
+// =====================================================
+// ADMIN - GET ALL ORDERS
+// GET /api/orders/admin/all
+// =====================================================
+
+router.get(
+    "/admin/all",
+    authMiddleware,
+    adminMiddleware,
+    (req, res) => {
+
+        const sql = `
+            SELECT
+                orders.id,
+                orders.user_id,
+                users.name AS customer_name,
+                users.email,
+                orders.total_amount,
+                orders.status,
+                orders.created_at
+            FROM orders
+            JOIN users ON orders.user_id = users.id
+            ORDER BY orders.created_at DESC
+        `;
+
+        db.query(sql, (err, results) => {
+
+            if (err) {
+                return res.status(500).json({
+                    message: "Database error",
+                    error: err.message
+                });
+            }
+
+            res.json({
+                message: "All orders retrieved successfully",
+                orders: results
+            });
+
+        });
+    }
+);
+
+
+// =====================================================
+// ADMIN - UPDATE ORDER STATUS
+// PUT /api/orders/admin/:id/status
+// =====================================================
+
+router.put(
+    "/admin/:id/status",
+    authMiddleware,
+    adminMiddleware,
+    (req, res) => {
+
+        const orderId = req.params.id;
+        const { status } = req.body;
+
+        const allowedStatuses = [
+            "pending",
+            "processing",
+            "shipped",
+            "delivered",
+            "cancelled"
+        ];
+
+        if (!allowedStatuses.includes(status)) {
+            return res.status(400).json({
+                message: "Invalid order status"
+            });
+        }
+
+        const sql = `
+            UPDATE orders
+            SET status = ?
+            WHERE id = ?
+        `;
+
+        db.query(
+            sql,
+            [status, orderId],
+            (err, result) => {
+
+                if (err) {
+                    return res.status(500).json({
+                        message: "Database error",
+                        error: err.message
+                    });
+                }
+
+                if (result.affectedRows === 0) {
+                    return res.status(404).json({
+                        message: "Order not found"
+                    });
+                }
+
+                res.json({
+                    message: "Order status updated successfully",
+                    orderId: orderId,
+                    status: status
+                });
+
+            }
+        );
+    }
+);
 module.exports = router;
